@@ -29,21 +29,29 @@
 
 ### Choice of Quantum Algorithm
 * **Algorithm:** [Identify the specific algorithm or ansatz]
-* Digitized Adiabatic Quantum Optimization (dAQO) seeding implemented in CUDA-Q. The paper reports that QE-MTS exhibits low-quantile outlier replicate-median TTS points, by comparing against an algorithm without the counterdiabatic correction term, we seek to investigate the source of these very fast outliers.
-    * *Example:* "Quantum Approximate Optimization Algorithm (QAOA) with a hardware-efficient ansatz."
-    * *Example:* "Variational Quantum Eigensolver (VQE) using a custom warm-start initialization."
+* Digitized Adiabatic Quantum Optimization (dAQO) seeding implemented in CUDA-Q. The paper reports that QE-MTS exhibits low-quantile outlier replicate-median TTS points, by comparing against an algorithm without the counterdiabatic correction term, we seek to investigate the source of these very fast outliers. 
 
 * **Motivation:** [Why this algorithm? Connect it to the problem structure or learning goals.]
 * Fig. 2 + Sec. IV.1 reports  QE-MTS outliers (very low TTS replicate-medians), visible as points far below the MTS distribution and discussed as low-quantile outliers. These are captured around 
-Q_0.04 in their analysis. We want to investigate whether the CD term does not merely improve average seeding quality; it changes the tail behavior (frequency of very fast solves) by placing probability mass into rare good basins that MTS exploits quickly. We test whether dAQO produces a statistically different fast-outlier rate than DCQO under compute-matched budgets. Understanding this would privide insight into what it is about the specific structure of the quantum algorithm which provides extensive speedup for this task. QAOA has been shown (in the literature) to not be immediately amenable to this problem, VQE's heavy training requirements are a poor fit for this investigation and QITE is likely a very good competitor with regard to expected outlier probability, but I am working alone and this may require too much overhead within the constraints of the hackathon. By investigating dAQO we can investigate how the structure of a quantum algorithm affects its statistics, and this could provide insight into faster algorithmic avenues.
+Q_0.04 in their analysis. We want to investigate whether the CD term does not merely improve average seeding quality; it changes the tail behavior (frequency of very fast solves) by placing probability mass into rare good basins that MTS exploits quickly. We test whether dAQO produces a statistically different fast-outlier rate than DCQO under compute-matched budgets. Understanding this would privide insight into what it is about the specific structure of the quantum algorithm which provides extensive speedup for this task. QAOA has been shown (in the literature) to not be immediately amenable to this problem, VQE's heavy training requirements are a poor fit for this investigation and QITE is likely a very good competitor with regard to expected outlier probability, but I am working alone and this may require too much overhead within the constraints of the hackathon. By investigating dAQO we can investigate how the structure of a quantum algorithm affects its statistics, and this could provide insight into faster algorithmic avenues. We analyse with the same N, same number of Trotter steps, same shots, same MTS wall-time budget per run and seek only the statistical variations in outliers.
   
    
 
 ### Literature Review
 * **Reference:** [Title, Author, Link]
 * **Relevance:** [How does this paper support your plan?]
-    * *Example:* "Reference: 'QAOA for MaxCut.' Relevance: Although LABS is different from MaxCut, this paper demonstrates how parameter concentration can speed up optimization, which we hope to replicate."
-
+**Alejandro Gomez Cadavid et al., “Scaling advantage with quantum-enhanced memetic tabu search for LABS” (2025, preprint).
+*Relevance: Baseline paper extensively referred to in tutorial. This motivates my core question: whether the CD term changes the tail of the TTS distribution rather than only the median.
+**Narendra N. Hegade, X. Chen, and E. Solano, “Digitized-counterdiabatic quantum optimization” (2022, Physical Review Research 4, L042030).
+*Relevance: Foundational reference for DCQO itself. Explains origin of CD term and why it can accelerate ground-state targeting. This is the key theory of what we are ablation testing.
+**David Guéry-Odelin et al., “Shortcuts to adiabaticity: Concepts, methods, and applications” (2019, Reviews of Modern Physics 91, 045001).
+*Relevance: Broad overview of shortcuts to adiabaticity and counterdiabatic driving. Explains why removing CD term produces a principled baseline (dAQO) rather than an arbitrary parameter tuning
+**Zhiwei Zhang et al., “New Improvements in Solving Large LABS Instances Using Massively Parallelizable Memetic Tabu Search” (2025, preprint arXiv:2504.00987).
+*Relevance: Describes MTS implementation using large parallelisation on NVIDIA A100 systems, directly applicable to the GPU acceleration aspect of this problem and gives me good insight for GPU acceleration approach to take.
+**Ruslan Shaydulin et al., “Evidence of scaling advantage for the quantum approximate optimization algorithm on a classically intractable problem” (2024, Science Advances; also preprint arXiv:2308.02342).
+*Relevance: Explains why QAOA is a good alternative but may require substantial depth in practice. 
+**Nora M. Bauer et al., “Combinatorial optimization with quantum imaginary time evolution” (2023, preprint arXiv:2312.16664).
+*Relevance: applies QITE to PUBO problems comparing with QAOA-depth regimes. This supports my statement that QITE could be a compelling competitor, but may be too ambitious to properly investigate.
 ---
 
 ## 3. The Acceleration Strategy
@@ -51,17 +59,17 @@ Q_0.04 in their analysis. We want to investigate whether the CD term does not me
 
 ### Quantum Acceleration (CUDA-Q)
 * **Strategy:** [How will you use the GPU for the quantum part?]
-    * We test with a single L4, then distribute the circuit simulation across multiple L4s to allow multiple runs to be sampled quickly. We batch shots and keep circuit execution inside GPU loops to avoid CPU to GPU overhead I have encountered in previous GPU accelerated workflows. We benchmark shots/sec for dAQO vs DCQO at same N and depth. For this task we don't seek to push the limits of high N, but instead repeatedly sample in the quantum advantageous region to determine the statistical significance of these fast outliers.
+    * We test with a single L4. We batch shots and keep circuit execution inside GPU loops to avoid CPU to GPU overhead I have encountered in previous GPU accelerated workflows. We benchmark shots/sec for dAQO vs DCQO at same N and depth. For this task we don't seek to push the limits of high N, but instead repeatedly sample in the quantum advantageous region to determine the statistical significance of these fast outliers. We could optionally distribute the circuit simulation across multiple L4s to allow multiple runs to be sampled quickly.
  
 
 ### Classical Acceleration (MTS)
 * **Strategy:** [The classical search has many opportuntities for GPU acceleration. What will you chose to do?]
-* We will port the energy evaluation to GPU, allowing us to evaluate energies for whole populations in parallel, massively reducing classical overhead due to the sums in these terms.
+* We will port the energy evaluation to GPU, allowing us to evaluate energies for whole populations in parallel, massively reducing classical overhead due to the sums in these terms. To do this, we implement GPU batch energy evaluation for a batch of K sequences (population + candidates) using CuPy and replace per-candidate Python loops with vectorized GPU kernels.
 
 
 ### Hardware Targets
-* **Dev Environment:** Logic verified for small samples on QBraid CPU runs, later initial GPU testing will be performed on low-demand, low-power Breb GPUs to ensure GPU workflow is error-free and the GPU workflow is actually capable of achieving speedup vs CPU-based logic. Final benchmarks perform on A100 for short, controlled runs.
-* **Production Environment:** Brev A100-80GB to run repeated runs at relatively high N, but not pushing limits. The goal is not to push limits of high N, but instead to investigate whether the high frequency of fast outliers is affected by the presence of the  counterdiabatic term
+* **Dev Environment:** Logic verified for small samples on QBraid CPU runs, later initial GPU testing will be performed on low-demand, low-power Brev GPUs to ensure GPU workflow is error-free and the GPU workflow is actually capable of achieving speedup vs CPU-based logic. Final benchmarks perform on A100 for short, controlled runs.
+* **Production Environment:** Brev A100-80GB to run repeated runs at relatively high N. We will target the quantum-advantage region N=33–37 highlighted by the paper for tail statistics, we are not chasing the maximum N possible. The goal is not to push limits of high N, but instead to investigate whether the high frequency of fast outliers is affected by the presence of the counterdiabatic term.
 
 ---
 
@@ -69,7 +77,6 @@ Q_0.04 in their analysis. We want to investigate whether the CD term does not me
 **Raife Foulkes:** Quality Assurance PIC
 
 ### Unit Testing Strategy
-* **Framework:** [e.g., `pytest`, `unittest`]
 * **AI Hallucination Guardrails:** [How do you know the AI code is right?]
 * We will ensure all generated results pass low-cost tests, e.g. all bitstrings of length N, data types consistent and values within reasonable bounds
     
@@ -78,8 +85,9 @@ Q_0.04 in their analysis. We want to investigate whether the CD term does not me
 * **Check 1 (Symmetry):** 
     * LABS sequence $S$ and its negation $-S$, bitstring reversal and staggering negatives ($00000 -> 01010$) must have identical energies. We will sample a number of used bitstrings and verify that the energies of all strings within this verification sample which share one of these symmetries are identical. 
 * **Check 2 (Brute Force):**
-    * For small N, solutions can be directly verified against a brute force algorithm, and for very small N both can be verified against hand calculations
-
+    * For small N, solutions can be directly verified against a brute force algorithm, and for very small N both can be verified against hand calculations. We verify for al N < 8 against a brute force algorithm to ensure correctness.
+* **Check 3 (GPU vs CPU Equivalence):**
+* Results are expected to be identical whether they are run on the GPU or CPU, this will allow us to fiund errors when porting over to GPU accelerated workflow.
 ---
 
 ## 5. Execution Strategy & Success Metrics
@@ -90,19 +98,18 @@ Q_0.04 in their analysis. We want to investigate whether the CD term does not me
 * We are using ChatGPT Pro and Codex to speedup workflow. We have compiled all of the CUDA-Q documentation, relevant literature from the literature review and earlier code to provide context to the agents. Codex provides higher quality code but sometimes lacks reasoninsg passing back through ChatGPT 5.2 Thinking can help diagnose bigger-picture errors. I have experience using this combination to port from CPU to GPU accelerated workflows for numerical simulation so I am aware of a number of mistakes it may try to make, and how ti fix them.
 
 ### Success Metrics
-* **Metric 1 (GPU Speedup):** Achieve faster wall-time-to-solution with CPU vs GPU
-* **Metric 1 (Reproducibility):** Reproduce the high-speed outliers observed in the paper
+* **Metric 1 (GPU Speedup):** Achieve faster wall-time-to-solution with GPU vs CPU
+* **Metric 1 (Reproducibility):** Reproduce the high-speed outliers observed in the paper. We define a fast outlier to be a run which reaches energy ≤ E_target within τ seconds, where τ might be 10% of DCQO median TTS or in the lowest 4$ of TTS outcomes to align with the paper. We aim for R repeats in the range of R = 50-200 depending on runtime, with a minimum of R=50.
 * **Metric 2 (Statistical analysis):** Perform a statistical hypothesis test to determine whether the CD term is responsible for these high-speed outliers
 
 ### Visualization Plan
 * **Plot 1:** [e.g., "Time-to-Solution vs. Problem Size (N)" comparing CPU vs. GPU]
 * **Plot 2:** Compare $Q_{0.04}$, $Q_{0.10}$ of TTS distributions between dAQO-MTS and DCQO-MTS. (Outliers expected $\sim Q_{0.04}$)
-
+* **Plot 3:** Empirical distribution function of TTS for dAQO vs DCQO to visually distinguish the tails
 ---
 
 ## 6. Resource Management Plan
 **Raife:** GPU Acceleration PIC 
 
 * **Plan:** [How will you avoid burning all your credits?]
-* All development to remain on Qbraid CPU runs until logic fully implemented. Low-demand, low-cost L4 runs will then be utilised to ensure GPU acceleration is working as intended and finally A100 will be used only for polished final results after GPU acceleration has been shown to be error free and promising in its implementation
-  
+* All development to remain on Qbraid CPU runs until logic fully implemented. Low-demand, low-cost L4 runs will then be utilised to ensure GPU acceleration is working as intended and finally A100 will be used only for polished final results after GPU acceleration has been shown to be error free and promising in its implementation. I will shut down all instances during breaks, there will be no idle time greater than 10 minutes.  
