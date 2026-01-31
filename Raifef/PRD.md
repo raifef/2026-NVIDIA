@@ -29,11 +29,11 @@
 
 ### Choice of Quantum Algorithm
 * **Algorithm:** 
-* Digitized Adiabatic Quantum Optimization (DAQO) seeding implemented in CUDA-Q. The paper reports that QE-MTS exhibits low-quantile outlier replicate-median TTS points, by comparing against an algorithm without the counterdiabatic correction term, we seek to investigate the source of these very fast outliers. 
+* Digitized Adiabatic Quantum Optimization (DAQO) seeding implemented in CUDA-Q. The paper reports that QE-MTS exhibits low-quantile outlier replicate-median TTS points; we seek to investigate the source of these very fast outliers. 
 
 * **Motivation:** 
 * Fig. 2 + Sec. IV.1 reports  QE-MTS outliers (very low TTS replicate-medians), visible as points far below the MTS distribution and discussed as low-quantile outliers. These are captured around 
-Q_0.04 in their analysis. We want to investigate whether the CD term does not merely improve average seeding quality; it changes the tail behavior (frequency of very fast solves) by placing probability mass into rare good basins that MTS exploits quickly. We test whether DAQO produces a statistically different fast-outlier rate than DCQO under compute-matched budgets. Understanding this would privide insight into what it is about the specific structure of the quantum algorithm which provides extensive speedup for this task. DAQO is a digitized quantum annealing protocol: it prepares candidate bitstrings by evolving under a scheduled combination of a mixing Hamiltonian and the LABS cost Hamiltonian for a fixed number of discrete steps. DCQO is a different protocol that augments this evolution with counterdiabatic terms designed to suppress non-adiabatic transitions and reshape the sampling distribution. QAOA has been shown (in the literature) to not be immediately amenable to this problem, VQE's heavy training requirements are a poor fit for this investigation and QITE is likely a very good competitor with regard to expected outlier probability, but I am working alone and this may require too much overhead within the constraints of the hackathon. By investigating DAQO we can investigate how the structure of a quantum algorithm affects its statistics, and this could provide insight into faster algorithmic avenues. We analyse with the same N, same number of Trotter steps, same shots, same MTS wall-time budget per run and seek only the statistical variations in outliers.
+Q_0.04 in their analysis. We want to investigate whether the CD term does not merely improve average seeding quality; it changes the tail behavior (frequency of very fast solves) by placing probability mass into rare good basins that MTS exploits quickly. We test whether DAQO produces a statistically different fast-outlier rate than DCQO under compute-matched budgets. Understanding this would provide insight into what it is about the specific structure of the quantum algorithm which provides extensive speedup for this task. DAQO is a digitized quantum annealing protocol: it prepares candidate bitstrings by evolving under a scheduled combination of a mixing Hamiltonian and the LABS cost Hamiltonian for a fixed number of discrete steps. DCQO is a different protocol that augments this evolution with counterdiabatic terms designed to suppress non-adiabatic transitions and reshape the sampling distribution. QAOA has been shown (in the literature) to not be immediately amenable to this problem, VQE's heavy training requirements are a poor fit for this investigation and QITE is likely a very good competitor with regard to expected outlier probability, but I am working alone and this may require too much overhead within the constraints of the hackathon. By investigating DAQO we can investigate how the structure of a quantum algorithm affects its statistics, and this could provide insight into faster algorithmic avenues. We analyse with the same N, same number of Trotter steps, same shots, same MTS wall-time budget per run and seek only the statistical variations in outliers.
   
    
 
@@ -77,7 +77,7 @@ Q_0.04 in their analysis. We want to investigate whether the CD term does not me
 ### Unit Testing Strategy
 * **Framework:** pytest (plus optional hypothesis property tests).
 * **AI Hallucination Guardrails:** 
-* We will ensure all generated results pass low-cost tests, all bitstrings of length N, data types consistent and values within reasonable bounds (energy is deterministic for identical bitstring input, energy is invariant under: global flip, reversal, staggering transform, for N < 8, brute force enumeration matches energy results and known minima)
+* We will ensure all generated results pass low-cost tests, all bitstrings of length N, data types consistent and values within reasonable bounds (energy is deterministic for identical bitstring input, energy is invariant under: global flip, reversal, staggering negatives)
     
 
 ### Core Correctness Checks
@@ -94,7 +94,7 @@ Q_0.04 in their analysis. We want to investigate whether the CD term does not me
 
 ### Agentic Workflow
 * **Plan:** 
-* We are using ChatGPT Pro and Codex to speedup workflow. We have compiled all of the CUDA-Q documentation, relevant literature from the literature review and earlier code to provide context to the agents. Codex provides higher quality code but sometimes lacks reasoninsg passing back through ChatGPT 5.2 Thinking can help diagnose bigger-picture errors. I have experience using this combination to port from CPU to GPU accelerated workflows for numerical simulation so I am aware of a number of mistakes it may try to make, and how ti fix them.
+* We are using ChatGPT Pro and Codex to speed up the workflow. We have compiled all of the CUDA-Q documentation, relevant literature from the literature review and earlier code to provide context to the agents. Codex provides higher quality code but sometimes lacks reasoning passing back through ChatGPT 5.2 Thinking can help diagnose bigger-picture errors. I have experience using this combination to port from CPU to GPU accelerated workflows for numerical simulation so I am aware of a number of mistakes it may try to make, and how ti fix them.
 
 ### Success Metrics
 * **Metric 1 (GPU Speedup):** Achieve faster wall-time-to-solution with GPU vs CPU
