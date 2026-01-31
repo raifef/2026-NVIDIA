@@ -1,6 +1,6 @@
 # Product Requirements Document (PRD)
 
-**Project Name:** Statistical Analysis on Fast-Outliers in DCQO and DAQO-Based QE-MTS for the LABS Problem
+**Project Name:** Statistical Analysis on Fast-Outliers in DCQO and DAQO-based QE-MTS for the LABS Problem
 **Team Name:** QuackingOn
 **GitHub Repository:** https://github.com/raifef/2026-NVIDIA.git
 
@@ -33,7 +33,7 @@
 
 * **Motivation:** 
 * Fig. 2 + Sec. IV.1 reports  QE-MTS outliers (very low TTS replicate-medians), visible as points far below the MTS distribution and discussed as low-quantile outliers. These are captured around 
-Q_0.04 in their analysis. We want to investigate whether the CD term does not merely improve average seeding quality; it changes the tail behavior (frequency of very fast solves) by placing probability mass into rare good basins that MTS exploits quickly. We test whether DAQO produces a statistically different fast-outlier rate than DCQO under compute-matched budgets. Understanding this would privide insight into what it is about the specific structure of the quantum algorithm which provides extensive speedup for this task. QAOA has been shown (in the literature) to not be immediately amenable to this problem, VQE's heavy training requirements are a poor fit for this investigation and QITE is likely a very good competitor with regard to expected outlier probability, but I am working alone and this may require too much overhead within the constraints of the hackathon. By investigating DAQO we can investigate how the structure of a quantum algorithm affects its statistics, and this could provide insight into faster algorithmic avenues. We analyse with the same N, same number of Trotter steps, same shots, same MTS wall-time budget per run and seek only the statistical variations in outliers.
+Q_0.04 in their analysis. We want to investigate whether the CD term does not merely improve average seeding quality; it changes the tail behavior (frequency of very fast solves) by placing probability mass into rare good basins that MTS exploits quickly. We test whether DAQO produces a statistically different fast-outlier rate than DCQO under compute-matched budgets. Understanding this would privide insight into what it is about the specific structure of the quantum algorithm which provides extensive speedup for this task. DAQO is a digitized quantum annealing protocol: it prepares candidate bitstrings by evolving under a scheduled combination of a mixing Hamiltonian and the LABS cost Hamiltonian for a fixed number of discrete steps. DCQO is a different protocol that augments this evolution with counterdiabatic terms designed to suppress non-adiabatic transitions and reshape the sampling distribution. QAOA has been shown (in the literature) to not be immediately amenable to this problem, VQE's heavy training requirements are a poor fit for this investigation and QITE is likely a very good competitor with regard to expected outlier probability, but I am working alone and this may require too much overhead within the constraints of the hackathon. By investigating DAQO we can investigate how the structure of a quantum algorithm affects its statistics, and this could provide insight into faster algorithmic avenues. We analyse with the same N, same number of Trotter steps, same shots, same MTS wall-time budget per run and seek only the statistical variations in outliers.
   
    
 
@@ -57,12 +57,12 @@ Q_0.04 in their analysis. We want to investigate whether the CD term does not me
 
 ### Quantum Acceleration (CUDA-Q)
 * **Strategy:**
-    * We test with a single L4. We batch shots and keep circuit execution inside GPU loops to avoid CPU to GPU overhead I have encountered in previous GPU accelerated workflows. We benchmark shots/sec for DAQO vs DCQO at same N and depth. For this task we don't seek to push the limits of high N, but instead repeatedly sample in the quantum advantageous region to determine the statistical significance of these fast outliers. We could optionally distribute the circuit simulation across multiple L4s to allow multiple runs to be sampled quickly.
+    * We test with a single L4. We batch shots and keep circuit execution inside GPU loops to avoid CPU to GPU overhead I have encountered in previous GPU accelerated workflows. We benchmark shots/sec for DAQO vs DCQO at same N and depth. For this task we don't seek to push the limits of high N, but instead repeatedly sample in the paper’s highlighted regime (N=33–37), where low-quantile outliers were reported, to determine the statistical significance of these fast outliers. We could optionally distribute the circuit simulation across multiple L4s to allow multiple runs to be sampled quickly.
  
 
 ### Classical Acceleration (MTS)
 * **Strategy:** 
-* We will port the energy evaluation to GPU, allowing us to evaluate energies for whole populations in parallel, massively reducing classical overhead due to the sums in these terms. To do this, we implement GPU batch energy evaluation for a batch of K sequences (population + candidates) using CuPy and replace per-candidate Python loops with vectorized GPU kernels.
+* We will port the energy evaluation to GPU, allowing us to evaluate energies for whole populations in parallel, massively reducing classical overhead due to the sums in these terms. To do this, we implement GPU batch energy evaluation for a batch of K sequences (population + candidates) using CuPy and replace per-candidate Python loops with vectorized GPU kernels. GPU batch energy is used for ranking the seed population, evaluating offspring during memetic recombination, and optionally evaluating a batch of neighbor moves per tabu step.
 
 
 ### Hardware Targets
@@ -75,17 +75,18 @@ Q_0.04 in their analysis. We want to investigate whether the CD term does not me
 **Raife Foulkes:** Quality Assurance PIC
 
 ### Unit Testing Strategy
+* **Framework:** pytest (plus optional hypothesis property tests).
 * **AI Hallucination Guardrails:** 
-* We will ensure all generated results pass low-cost tests, e.g. all bitstrings of length N, data types consistent and values within reasonable bounds
+* We will ensure all generated results pass low-cost tests, all bitstrings of length N, data types consistent and values within reasonable bounds (energy is deterministic for identical bitstring input, energy is invariant under: global flip, reversal, staggering transform, for N < 8, brute force enumeration matches energy results and known minima)
     
 
 ### Core Correctness Checks
 * **Check 1 (Symmetry):** 
     * LABS sequence $S$ and its negation $-S$, bitstring reversal and staggering negatives ($00000 -> 01010$) must have identical energies. We will sample a number of used bitstrings and verify that the energies of all strings within this verification sample which share one of these symmetries are identical. 
 * **Check 2 (Brute Force):**
-    * For small N, solutions can be directly verified against a brute force algorithm, and for very small N both can be verified against hand calculations. We verify for al N < 8 against a brute force algorithm to ensure correctness.
+    * For small N, solutions can be directly verified against a brute force algorithm, and for very small N both can be verified against hand calculations. We verify for all N < 8 against a brute force algorithm to ensure correctness.
 * **Check 3 (GPU vs CPU Equivalence):**
-* Results are expected to be identical whether they are run on the GPU or CPU, this will allow us to fiund errors when porting over to GPU accelerated workflow.
+* Results are expected to be identical whether they are run on the GPU or CPU, this will allow us to find errors when porting over to GPU accelerated workflow. We will test whether GPU and CPU energy evaluators match exactly for a fixed set of random bitstrings.
 ---
 
 ## 5. Execution Strategy & Success Metrics
@@ -97,8 +98,8 @@ Q_0.04 in their analysis. We want to investigate whether the CD term does not me
 
 ### Success Metrics
 * **Metric 1 (GPU Speedup):** Achieve faster wall-time-to-solution with GPU vs CPU
-* **Metric 1 (Reproducibility):** Reproduce the high-speed outliers observed in the paper. We define a fast outlier to be a run which reaches energy ≤ E_target within τ seconds, where τ might be 10% of DCQO median TTS or in the lowest 4$ of TTS outcomes to align with the paper. We aim for R repeats in the range of R = 50-200 depending on runtime, with a minimum of R=50.
-* **Metric 2 (Statistical analysis):** Perform a statistical hypothesis test to determine whether the CD term is responsible for these high-speed outliers
+* **Metric 2 (Reproducibility):** Reproduce the high-speed outliers observed in the paper. We primarily define a fast outlier to be a run in which the TTS is in the lowest 4$%$ of the DCQO TTS distribution, to align with the paper, or it may secondarily be defined as a run which reaches energy ≤ E_target within τ seconds, where τ might be 10% of DCQO median TTS. We aim for R repeats in the range of R = 50-200 depending on runtime, with a minimum of R=50.
+* **Metric 3 (Statistical analysis):** Perform a statistical hypothesis test to determine whether the CD term is responsible for these high-speed outliers. We will compare the probability for a fast outlier between methods using a two-proportion test and report binomial confidence intervals.
 
 ### Visualization Plan
 * **Plot 1:** Time-to-Solution vs. Problem Size (N) comparing CPU vs. GPU
