@@ -1,8 +1,8 @@
 # Product Requirements Document (PRD)
 
 **Project Name:** [e.g., LABS-Solv-V1]
-**Team Name:** [e.g., QuantumVibes]
-**GitHub Repository:** [Insert Link Here]
+**Team Name:** QuackingOn
+**GitHub Repository:** https://github.com/raifef/2026-NVIDIA.git
 
 ---
 
@@ -17,24 +17,26 @@
 
 | Role | Name | GitHub Handle | Discord Handle
 | :--- | :--- | :--- | :--- |
-| **Project Lead** (Architect) | [Name] | [@handle] | [@handle] |
-| **GPU Acceleration PIC** (Builder) | [Name] | [@handle] | [@handle] |
-| **Quality Assurance PIC** (Verifier) | [Name] | [@handle] | [@handle] |
-| **Technical Marketing PIC** (Storyteller) | [Name] | [@handle] | [@handle] |
+| **Project Lead** (Architect) | Raife Foulkes | @raifef | @raifef |
+| **GPU Acceleration PIC** (Builder) | Raife Foulkes | @raifef | @raifef |
+| **Quality Assurance PIC** (Verifier) | Raife Foulkes | @raifef | @raifef |
+| **Technical Marketing PIC** (Storyteller) | Raife Foulkes | @raifef | @raifef | (Solo Team)
 
 ---
 
 ## 2. The Architecture
-**Owner:** Project Lead
+**Raife Foulkes:** Project Lead
 
 ### Choice of Quantum Algorithm
 * **Algorithm:** [Identify the specific algorithm or ansatz]
+* Digitized Adiabatic Quantum Optimization (dAQO) seeding implemented in CUDA-Q. The paper reports that QE-MTS exhibits low-quantile outlier replicate-median TTS points, by comparing against an algorithm without the counterdiabatic correction term, we seek to investigate the source of these very fast outliers.
     * *Example:* "Quantum Approximate Optimization Algorithm (QAOA) with a hardware-efficient ansatz."
     * *Example:* "Variational Quantum Eigensolver (VQE) using a custom warm-start initialization."
 
 * **Motivation:** [Why this algorithm? Connect it to the problem structure or learning goals.]
-    * *Example (Metric-driven):* "We chose QAOA because we believe the layer depth corresponds well to the correlation length of the LABS sequences."
-    *  Example (Skills-driven):* "We selected VQE to maximize skill transfer. Our senior members want to test a novel 'warm-start' adaptation, while the standard implementation provides an accessible ramp-up for our members new to quantum variational methods."
+* Fig. 2 + Sec. IV.1 reports  QE-MTS outliers (very low TTS replicate-medians), visible as points far below the MTS distribution and discussed as low-quantile outliers. These are captured around 
+Q_0.04 in their analysis. We want to investigate whether the CD term does not merely improve average seeding quality; it changes the tail behavior (frequency of very fast solves) by placing probability mass into rare good basins that MTS exploits quickly. We test whether dAQO produces a statistically different fast-outlier rate than DCQO under compute-matched budgets. Understanding this would privide insight into what it is about the specific structure of the quantum algorithm which provides extensive speedup for this task. QAOA has been shown (in the literature) to not be immediately amenable to this problem, VQE's heavy training requirements are a poor fit for this investigation and QITE is likely a very good competitor with regard to expected outlier probability, but I am working alone and this may require too much overhead within the constraints of the hackathon. By investigating dAQO we can investigate how the structure of a quantum algorithm affects its statistics, and this could provide insight into faster algorithmic avenues.
+  
    
 
 ### Literature Review
@@ -45,60 +47,62 @@
 ---
 
 ## 3. The Acceleration Strategy
-**Owner:** GPU Acceleration PIC
+**Raife Foulkes:** GPU Acceleration PIC
 
 ### Quantum Acceleration (CUDA-Q)
 * **Strategy:** [How will you use the GPU for the quantum part?]
-    * *Example:* "After testing with a single L4, we will target the `nvidia-mgpu` backend to distribute the circuit simulation across multiple L4s for large $N$."
+    * We test with a single L4, then distribute the circuit simulation across multiple L4s to allow multiple runs to be sampled quickly. We batch shots and keep circuit execution inside GPU loops to avoid CPU to GPU overhead I have encountered in previous GPU accelerated workflows. We benchmark shots/sec for dAQO vs DCQO at same N and depth. For this task we don't seek to push the limits of high N, but instead repeatedly sample in the quantum advantageous region to determine the statistical significance of these fast outliers.
  
 
 ### Classical Acceleration (MTS)
 * **Strategy:** [The classical search has many opportuntities for GPU acceleration. What will you chose to do?]
-    * *Example:* "The standard MTS evaluates neighbors one by one. We will use `cupy` to rewrite the energy function to evaluate a batch of 1,000 neighbor flips simultaneously on the GPU."
+* We will port the energy evaluation to GPU, allowing us to evaluate energies for whole populations in parallel, massively reducing classical overhead due to the sums in these terms.
+
 
 ### Hardware Targets
-* **Dev Environment:** [e.g., Qbraid (CPU) for logic, Brev L4 for initial GPU testing]
-* **Production Environment:** [e.g., Brev A100-80GB for final N=50 benchmarks]
+* **Dev Environment:** Logic verified for small samples on QBraid CPU runs, later initial GPU testing will be performed on low-demand, low-power Breb GPUs to ensure GPU workflow is error-free and the GPU workflow is actually capable of achieving speedup vs CPU-based logic. Final benchmarks perform on A100 for short, controlled runs.
+* **Production Environment:** Brev A100-80GB to run repeated runs at relatively high N, but not pushing limits. The goal is not to push limits of high N, but instead to investigate whether the high frequency of fast outliers is affected by the presence of the  counterdiabatic term
 
 ---
 
 ## 4. The Verification Plan
-**Owner:** Quality Assurance PIC
+**Raife Foulkes:** Quality Assurance PIC
 
 ### Unit Testing Strategy
 * **Framework:** [e.g., `pytest`, `unittest`]
 * **AI Hallucination Guardrails:** [How do you know the AI code is right?]
-    * *Example:* "We will require AI-generated kernels to pass a 'property test' (Hypothesis library) ensuring outputs are always within theoretical energy bounds before they are integrated."
+* We will ensure all generated results pass low-cost tests, e.g. all bitstrings of length N, data types consistent and values within reasonable bounds
+    
 
 ### Core Correctness Checks
-* **Check 1 (Symmetry):** [Describe a specific physics check]
-    * *Example:* "LABS sequence $S$ and its negation $-S$ must have identical energies. We will assert `energy(S) == energy(-S)`."
-* **Check 2 (Ground Truth):**
-    * *Example:* "For $N=3$, the known optimal energy is 1.0. Our test suite will assert that our GPU kernel returns exactly 1.0 for the sequence `[1, 1, -1]`."
+* **Check 1 (Symmetry):** 
+    * LABS sequence $S$ and its negation $-S$, bitstring reversal and staggering negatives ($00000 -> 01010$) must have identical energies. We will sample a number of used bitstrings and verify that the energies of all strings within this verification sample which share one of these symmetries are identical. 
+* **Check 2 (Brute Force):**
+    * For small N, solutions can be directly verified against a brute force algorithm, and for very small N both can be verified against hand calculations
 
 ---
 
 ## 5. Execution Strategy & Success Metrics
-**Owner:** Technical Marketing PIC
+**Raife:** Technical Marketing PIC
 
 ### Agentic Workflow
 * **Plan:** [How will you orchestrate your tools?]
-    * *Example:* "We are using Cursor as the IDE. We have created a `skills.md` file containing the CUDA-Q documentation so the agent doesn't hallucinate API calls. The QA Lead runs the tests, and if they fail, pastes the error log back into the Agent to refactor."
+* We are using ChatGPT Pro and Codex to speedup workflow. We have compiled all of the CUDA-Q documentation, relevant literature from the literature review and earlier code to provide context to the agents. Codex provides higher quality code but sometimes lacks reasoninsg passing back through ChatGPT 5.2 Thinking can help diagnose bigger-picture errors. I have experience using this combination to port from CPU to GPU accelerated workflows for numerical simulation so I am aware of a number of mistakes it may try to make, and how ti fix them.
 
 ### Success Metrics
-* **Metric 1 (Approximation):** [e.g., Target Ratio > 0.9 for N=30]
-* **Metric 2 (Speedup):** [e.g., 10x speedup over the CPU-only Tutorial baseline]
-* **Metric 3 (Scale):** [e.g., Successfully run a simulation for N=40]
+* **Metric 1 (GPU Speedup):** Achieve faster wall-time-to-solution with CPU vs GPU
+* **Metric 1 (Reproducibility):** Reproduce the high-speed outliers observed in the paper
+* **Metric 2 (Statistical analysis):** Perform a statistical hypothesis test to determine whether the CD term is responsible for these high-speed outliers
 
 ### Visualization Plan
 * **Plot 1:** [e.g., "Time-to-Solution vs. Problem Size (N)" comparing CPU vs. GPU]
-* **Plot 2:** [e.g., "Convergence Rate" (Energy vs. Iteration count) for the Quantum Seed vs. Random Seed]
+* **Plot 2:** Compare $Q_{0.04}$, $Q_{0.10}$ of TTS distributions between dAQO-MTS and DCQO-MTS. (Outliers expected $\sim Q_{0.04}$)
 
 ---
 
 ## 6. Resource Management Plan
-**Owner:** GPU Acceleration PIC 
+**Raife:** GPU Acceleration PIC 
 
 * **Plan:** [How will you avoid burning all your credits?]
-    * *Example:* "We will develop entirely on Qbraid (CPU) until the unit tests pass. We will then spin up a cheap L4 instance on Brev for porting. We will only spin up the expensive A100 instance for the final 2 hours of benchmarking."
-    * *Example:* "The GPU Acceleration PIC is responsible for manually shutting down the Brev instance whenever the team takes a meal break."
+* All development to remain on Qbraid CPU runs until logic fully implemented. Low-demand, low-cost L4 runs will then be utilised to ensure GPU acceleration is working as intended and finally A100 will be used only for polished final results after GPU acceleration has been shown to be error free and promising in its implementation
+  
