@@ -6,7 +6,9 @@
 **Required Sections:**
 
 1. **The Workflow:** How did you organize your AI agents? (e.g., "We used a Cursor agent for coding and a separate ChatGPT instance for documentation").
+   
 2. **Verification Strategy:** How did you validate code created by AI?
+   
 * *Requirement:* You must describe specific **Unit Tests** you wrote to catch AI hallucinations or logic errors.
 
 
