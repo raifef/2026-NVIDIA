@@ -1,0 +1,7 @@
+metric,N,k_dcqo,n_dcqo,k_daqo,n_daqo,pval_z_one_sided_dcqo_gt_daqo,pval_fisher_one_sided_dcqo_gt_daqo,tau_rank,k_fast_dcqo,k_fast_daqo
+seed_hit_rate,16,25.0,100,2.0,100,9.716008035107947e-07,6.487117566324008e-07,,,
+seed_hit_rate,18,5.0,100,1.0,100,0.048653349853219334,0.10582392634786585,,,
+seed_hit_rate,20,1.0,99,0.0,99,0.15804266982040954,0.5,,,
+fast_outlier_rate_conditional_rank_tau04,16,,75,,98,0.3690306364442316,0.5259466478497403,0.0080160220004472,3.0,3.0
+fast_outlier_rate_conditional_rank_tau04,18,,95,,99,0.7199147777730849,0.8171822661778316,0.0088141899977927,4.0,6.0
+fast_outlier_rate_conditional_rank_tau04,20,,98,,99,0.08526342675855722,0.18113067070222327,0.01799580000079,4.0,1.0
