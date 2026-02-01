@@ -1,6 +1,14 @@
 ## Deliverables Checklist
 **All deliverables placed in the Raifef folder off main**
 
+
+
+
+
+
+
+
+
 **Step 0: (Due by noon eastern Sat Jan 31)**
 The Project Lead should fork this repository and share the forked repository link with the NVIDIA judges in a DM on discord (`Monica-NVIDIA`, `Linsey-NV Mentor`, and `Iman_nvidia`).  
 
