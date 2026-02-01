@@ -5,21 +5,18 @@
 
 **Required Sections:**
 
-1. **The Workflow:** How did you organize your AI agents? (e.g., "We used a Cursor agent for coding and a separate ChatGPT instance for documentation").
+1. **The Workflow:** How did you organize your AI agents? 
 *I split the work into two “agent roles” so I could move fast without losing control of correctness:
 
-*Builder (code-writing agent): Used an AI coding agent (ChatGPT/Codex-style workflow) to generate and refactor the main implementation in phase_ab_outliers.py: CUDA-Q sampling wrappers for DAQO/DCQO, population construction, and a GPU-capable LABS energy evaluator for batched scoring. I kept prompts narrowly scoped (one subsystem at a time) and always requested patch-style outputs so I could diff changes cleanly.
+*Builder (code-writing agent): Used an AI coding agent (ChatGPT Thinking + Codex) to generate and refactor the main implementation in phase_ab_outliers.py. I kept prompts narrowly scoped and always requested patch-style outputs so I could diff changes cleanly.
 
-*Verifier (analysis + QA agent): Used a separate ChatGPT session/persona as a skeptical reviewer to (i) audit my metrics vs the PRD definition (outliers as a low-quantile TTS phenomenon), (ii) sanity-check statistical logic (baseline-defined thresholds, two-proportion test, binomial CIs), and (iii) design a test plan targeting likely hallucinations (wrong energy formula, wrong symmetry assumptions, GPU/CPU mismatch, silently broken CSVs).
+*Verifier (analysis + QA agent): Used a separate ChatGPT session as well as CODA as a skeptical reviewer to audit my metrics vs the PRD definition (outliers as a low-quantile TTS phenomenon) and sanity-check statistical logic
 
-*Storyteller (documentation agent): Used ChatGPT to translate technical choices into PRD/README language: explaining compute-matching, describing success metrics (tail ECDF, Q0.04), and writing judge-facing interpretations of plots while explicitly calling out limitations (e.g., when wall-clock TTS is dominated by sampling runtime rather than MTS dynamics).
-
-*The Builder produced code, the Verifier tried to break it with tests and counterexamples, and the Storyteller wrote up what we did and why it is credible and how it fit into my declared PRD.
+*The Builder produced code and the Verifier tried to break it with tests and counterexamples
    
 2. **Verification Strategy:** How did you validate code created by AI?
 *Because AI-generated code is most likely to fail in silent, plausible ways (off-by-one errors, wrong spin mapping, wrong symmetry, incorrect batching, dtype bugs on GPU), I validated at three levels:
-
-Unit tests for mathematical invariants of LABS and conserved properties (e.g. symmetries), cross-implementation equivalence tests (scalar vs batch; CPU vs GPU) to catch hallucinated optimizations or incorrect vectorization and pipeline output tests for Phase-A and B CSVs to catch schema drift, inconsistent statistics and otherwise infeasible results.
+*Unit tests for mathematical invariants of LABS and conserved properties (e.g. symmetries), cross-implementation equivalence tests (scalar vs batch; CPU vs GPU) to catch hallucinated optimizations or incorrect vectorization and pipeline output tests for Phase-A and B CSVs to catch schema drift, inconsistent statistics and otherwise infeasible results.
 
 **Specific unit tests written**
 
@@ -38,9 +35,9 @@ Unit tests for mathematical invariants of LABS and conserved properties (e.g. sy
 
 * **Scalar vs batch correctness**
 
-*Check labs_energy_batch(pop, use_gpu=False) matches labs_energy(bits) for each item in the batch. If GPU is available, also check labs_energy_batch(pop, use_gpu=True) matches scalar results exactly.
+*Check labs_energy_batch(use_gpu=False) matches labs_energy(bits) for each item in the batch. If GPU is available, also check labs_energy_batch(use_gpu=True) matches scalar results exactly.
 
-*Why: Most AI errors happen when “optimizing” loops into vectorized kernels, especially with dtype conversions and indexing.
+*Why: Most AI errors happen when optimising loops into vectorized kernels, especially with dtype conversions and indexing, and I have encountered these errors before in previous prjects.
 
 * **Search convergence sanity**
 
