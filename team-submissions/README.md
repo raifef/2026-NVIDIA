@@ -1,7 +1,16 @@
 ## Deliverables Checklist
 **All deliverables placed in the Raifef folder off main**
 
+*
+*
+*
+*
+*
+*
+*
+*
 
+*
 
 
 
