@@ -19,68 +19,53 @@
 2. **Verification Strategy:** How did you validate code created by AI?
 *Because AI-generated code is most likely to fail in silent, plausible ways (off-by-one errors, wrong spin mapping, wrong symmetry, incorrect batching, dtype bugs on GPU), I validated at three levels:
 
-Unit tests for mathematical invariants of LABS and “must-never-break” properties (symmetries, bounds).
+Unit tests for mathematical invariants of LABS and conserved properties (e.g. symmetries), cross-implementation equivalence tests (scalar vs batch; CPU vs GPU) to catch hallucinated optimizations or incorrect vectorization and pipeline output tests for Phase-A and B CSVs to catch schema drift, inconsistent statistics and otherwise infeasible results.
 
-Cross-implementation equivalence tests (scalar vs batch; CPU vs GPU) to catch hallucinated optimizations or incorrect vectorization.
+**Specific unit tests written**
 
-Pipeline output tests for Phase-A/Phase-B CSVs to catch schema drift, inconsistent stats (quantiles not monotone), and “impossible” results.
+*All of these are implemented in test_phase_ab_sanity.py:
 
-Specific unit tests written (to catch hallucinations / logic errors)
+* **LABS Energy invariances (symmetry tests)**
 
-All of these are implemented in test_phase_ab_sanity.py:
+*Global flip of all bits should not change energy. Reversal should not change energy. Alternating sign should not change energy.
 
-A) LABS Energy invariances (symmetry tests)
+*Why: These are known invariances for the LABS objective. If AI hallucinates the spin mapping or correlation sum, these break immediately.
 
-Global flip of all bits should not change energy.
+* **Physical bounds**
+*Enforce: $0≤E≤∑_{k=1}^{N−1}(N−k)^2$
 
-Reversal should not change energy.
+*Why: This catches negative energies, overflow, or wrong correlation accumulation.
 
-Staggering (alternating sign / bit xor pattern) should not change energy.
+* **Scalar vs batch correctness**
 
-Why: These are known invariances for the LABS objective. If AI hallucinates the spin mapping or correlation sum, these break immediately.
+*Check labs_energy_batch(pop, use_gpu=False) matches labs_energy(bits) for each item in the batch. If GPU is available, also check labs_energy_batch(pop, use_gpu=True) matches scalar results exactly.
 
-B) Physical bounds
-Enforce: $0≤E≤∑_{k=1}^{N−1}(N−k)^2$
+*Why: Most AI errors happen when “optimizing” loops into vectorized kernels, especially with dtype conversions and indexing.
 
-Why: This catches negative energies, overflow, or wrong correlation accumulation.
+* **Search convergence sanity**
 
-C) Scalar vs batch correctness
+*Tabu search should never return a worse best energy than the start state (best-found energy is non-increasing). Memetic tabu search (MTS) should never worsen the best energy relative to the best in the initial population.
 
-Check labs_energy_batch(pop, use_gpu=False) matches labs_energy(bits) for each item in the batch.
+*Why: AI often writes search logic that accidentally overwrites the incumbent best or mis-tracks the best index.
 
-If GPU is available, also check labs_energy_batch(pop, use_gpu=True) matches scalar results exactly.
+* **Output CSV sanity checks**
 
-Why: Most AI errors happen when “optimizing” loops into vectorized kernels, especially with dtype conversions and indexing.
+*Phase-A schema exists and has required columns. Quantiles are monotone: bestE_sample <= q10 <= q50 <= q90. shots_per_s ≈ shots / sample_elapsed_s (within tolerance). Energies are within bounds. Phase-B sanity: mts_bestE <= seed_bestE, mts_outer_iters >= 1, finite times.
 
-D) Search convergence sanity
-
-Tabu search should never return a worse best energy than the start state (best-found energy is non-increasing).
-
-Memetic tabu search (MTS) should never worsen the best energy relative to the best in the initial population.
-
-Why: AI often writes search logic that accidentally overwrites the incumbent best or mis-tracks the best index.
-
-E) Output CSV sanity checks
-
-Phase-A schema exists and has required columns.
-
-Quantiles are monotone: bestE_sample <= q10 <= q50 <= q90.
-
-shots_per_s ≈ shots / sample_elapsed_s (within tolerance).
-
-Energies are within bounds.
-
-Phase-B sanity: mts_bestE <= seed_bestE, mts_outer_iters >= 1, finite times.
-
-Why: AI can “make the code run” but write inconsistent stats or malformed outputs that corrupt downstream analysis.
-   
-* *Requirement:* You must describe specific **Unit Tests** you wrote to catch AI hallucinations or logic errors.
+*Why: AI can “make the code run” but write inconsistent stats or malformed outputs that corrupt downstream analysis.
 
 
 3. **The "Vibe" Log:**
-* *Win:* One instance where AI saved you hours.
-* *Learn:* One instance where you altered your prompting strategy (provided context, created a skills.md file, etc) to get better results from your interaction with the AI agent.
-* *Fail:* One instance where AI failed/hallucinated, and how you fixed it.
-* *Context Dump:* Share any prompts, `skills.md` files, MCP etc. that demonstrate thoughtful prompting.
+*Debugging the PRD mismatch (“outliers” weren’t actually outliers):
+*AI quickly noticed that my original Phase-B outlier logic was selecting outliers based on sampling runtime rather than time-to-hit-target (TTS), and that MTS couldn’t terminate early if TARGET_E was unreachable. That would have invalidated the entire tail statistics claim. The AI’s critique led directly to instrumenting tts_hit_s and rethinking outlier thresholds, saving a lot of time that I would otherwise have spent analysing meaningless outliers.
+
+* *Learn - where I changed prompting to get better results*
+*Switching from “write code” to “write tests + patch diffs”:
+*Early prompts like “optimize this” tended to produce plausible-but-risky refactors. I improved results by: Providing explicit invariants (symmetry, bounds) and demanding tests first. Asking for patch-style diffs rather than full rewrites. Supplying a “definition of done” for each step (e.g., “batch and scalar energies must match exactly” + “CSV quantiles must be monotone”). This kept the agent constrained, reduced hallucinated changes, and made review feasible.
+
+* *Fail - where AI hallucinated (and how I fixed it)*
+*Hallucinated performance/meaning from plots:
+*At one point the agent inferred “DAQO is much better” from a tail-ECDF where DAQO’s wall-clock was smaller. But the underlying data showed that the difference was dominated by sampling runtime (DCQO circuit simulation slower), while seed quality often favored DCQO (higher seed-hit rate). 
+* Fix: I changed analysis to separate components: report sample_elapsed_s and mts_t_hit_s separately, define outliers in the metric aligned with the PRD hypothesis, and compute outlier thresholds based on DCQO baseline for the relevant metric.
 
 
